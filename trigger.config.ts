@@ -1,10 +1,12 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID!, // Found in Trigger.dev Dashboard
+  // REPLACE THIS STRING WITH YOUR ACTUAL PROJECT REF
+  project: "proj_djqfrixwcnmbnoneybxq", 
+  
   runtime: "node",
   logLevel: "log",
-  // Automatically retry failed jobs (e.g., if GitHub API flickers)
+  maxDuration: 60, 
   retries: {
     enabledInDev: true,
     default: {
@@ -15,5 +17,5 @@ export default defineConfig({
       randomize: true,
     },
   },
-  dirs: ["./trigger"], // Look for jobs in the 'trigger' folder
+  dirs: ["./trigger"], 
 });

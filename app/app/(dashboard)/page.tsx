@@ -1,27 +1,20 @@
 import Link from "next/link";
-import { Plus, ExternalLink, Github, Globe } from "lucide-react";
+import { Plus, ExternalLink, Globe } from "lucide-react";
+import { supabaseAdmin } from "@/lib/supabase";
 
-// MOCK DATA: In Phase 2, we will fetch this from Supabase
-const projects = [
-  {
-    id: "1",
-    name: "Dentist CRM",
-    subdomain: "dentist-crm",
-    status: "live",
-    lastUpdated: "2 mins ago",
-    repo: "github.com/user/dentist-crm",
-  },
-  {
-    id: "2",
-    name: "Marketing Blog",
-    subdomain: "marketing-blog",
-    status: "building",
-    lastUpdated: "Just now",
-    repo: "github.com/user/marketing-blog",
-  },
-];
+// Force dynamic rendering so we see new projects instantly
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  // FETCH REAL DATA
+  const { data: projects, error } = await supabaseAdmin
+    .from("tenants")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Supabase Error:", error);
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Header */}
@@ -41,38 +34,51 @@ export default function DashboardPage() {
 
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project) => (
+        {/* Show projects if they exist */}
+        {projects?.map((project) => (
           <div
             key={project.id}
             className="group bg-white border border-gray-200 rounded-xl p-6 hover:border-gray-300 hover:shadow-md transition-all"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                  {project.name[0]}
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg uppercase">
+                  {project.name ? project.name[0] : "A"}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">
                     {project.name}
                   </h3>
                   <a
-                    href={`https://${project.subdomain}.vercel.app`}
+                    href={project.custom_domain ? `https://${project.custom_domain}` : `http://${project.slug}.localhost:3000`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
                   >
-                    {project.subdomain}.vercel.app
+                    {project.slug}
                     <ExternalLink size={12} />
                   </a>
                 </div>
               </div>
-              <StatusBadge status={project.status} />
+              <span className="text-xs font-medium px-2.5 py-0.5 rounded-full border bg-green-100 text-green-700 border-green-200">
+                Active
+              </span>
             </div>
-            {/* ... rest of card ... */}
+            
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-4">
+              <span className="text-xs text-gray-400">
+                {new Date(project.created_at).toLocaleDateString()}
+              </span>
+              <div className="flex gap-2">
+                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                  <Globe size={16} />
+                </button>
+              </div>
+            </div>
           </div>
         ))}
 
-        {/* "New Project" Card */}
+        {/* "Create New" Card */}
         <Link
           href="/new"
           className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer h-full min-h-[200px]"
@@ -84,21 +90,5 @@ export default function DashboardPage() {
         </Link>
       </div>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    live: "bg-green-100 text-green-700 border-green-200",
-    building: "bg-yellow-100 text-yellow-700 border-yellow-200 animate-pulse",
-    failed: "bg-red-100 text-red-700 border-red-200",
-  };
-  
-  const labels = { live: "Live", building: "Building...", failed: "Failed" };
-
-  return (
-    <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${styles[status as keyof typeof styles]}`}>
-      {labels[status as keyof typeof labels]}
-    </span>
   );
 }

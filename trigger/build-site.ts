@@ -54,9 +54,19 @@ export const buildSite = task({
 
     // 6. Vercel Deployment
     await logger.info("☁️ Deploying to Vercel...");
-    const project = await vercel.createProject(`${owner}/${repoName}`, repo.id);
+    // FIX: Pass repoName as the project Name (sanitized), and pass owner/repo as the full repo path
+    const project = await vercel.createProject(repoName, repo.id, `${owner}/${repoName}`);
+    
     const fullDomain = `${payload.subdomain}-${uniqueSuffix}.${rootDomain}`;
-    await vercel.addDomain(project.id, fullDomain);
+    
+    // FIX: Only add custom domain if we are NOT on localhost
+    // Vercel API rejects "something.localhost:3000"
+    if (!rootDomain.includes("localhost")) {
+      await logger.info("🌐 Adding Custom Domain...", { fullDomain });
+      await vercel.addDomain(project.id, fullDomain);
+    } else {
+      await logger.info("⚠️ Skipping Vercel Domain (Localhost detected)", { fullDomain });
+    }
 
     // 7. Save to DB
     await logger.info("💾 Saving to Database...");

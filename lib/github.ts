@@ -13,14 +13,25 @@ export const github = {
 
   createRepo: async (name: string, description: string) => {
     try {
+      // FIX: Sanitize description to remove control characters
+      // 1. Replace newlines/tabs with spaces
+      // 2. Remove non-printable ASCII characters
+      // 3. Trim whitespace
+      const cleanDescription = description
+        .replace(/[\r\n\t]/g, " ")
+        .replace(/[^\x20-\x7E]/g, "")
+        .trim()
+        .slice(0, 350); // GitHub description limit is technically larger, but safe side
+
       const response = await octokit.rest.repos.createForAuthenticatedUser({
         name,
-        description,
+        description: cleanDescription,
         private: true,
         auto_init: true, // This creates the 'main' branch with a README
       });
       return response.data;
     } catch (error: any) {
+      // Handle "Repo already exists" specifically
       if (error.status === 422 && error.message.includes("name already exists")) {
         console.log(`Repo '${name}' already exists. Fetching existing repo...`);
         const { data: user } = await octokit.rest.users.getAuthenticated();
@@ -30,7 +41,9 @@ export const github = {
         });
         return existingRepo;
       }
-      console.error("GitHub Repo Creation Failed:", error.message);
+      
+      // Log the detailed error for debugging
+      console.error("GitHub Repo Creation Failed:", error.message, ":", JSON.stringify(error.response?.data));
       throw new Error(`Failed to create repo: ${error.message}`);
     }
   },

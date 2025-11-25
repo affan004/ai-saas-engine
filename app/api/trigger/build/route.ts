@@ -11,9 +11,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // MOCK USER ID (Must be a valid UUID for Postgres)
-    // In the future, this comes from: const { user } = await supabase.auth.getUser();
-    const TEST_USER_ID = "00000000-0000-0000-0000-000000000000"; 
+    // --- FIX APPLIED HERE ---
+    // The Error "23503" happened because '0000...' didn't exist in auth.users.
+    // To fix this, replace the UUID below with a REAL User UID from your Supabase Dashboard.
+    // Go to Supabase -> Authentication -> Users -> Copy UID.
+    const TEST_USER_ID = "0795318f-f96e-42d3-b0aa-c4b49d7c4b95"; 
+    
+    // Note: Ideally, you should implement real auth check here:
+    // const cookieStore = cookies();
+    // const { data: { user } } = await supabase.auth.getUser();
+    // const userId = user?.id;
 
     const handle = await tasks.trigger<typeof buildSite>("build-site", {
       userId: TEST_USER_ID, 

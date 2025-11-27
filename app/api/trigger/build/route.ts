@@ -1,29 +1,42 @@
 import { NextResponse } from "next/server";
 import { buildSite } from "@/trigger/build-site"; 
 import { tasks } from "@trigger.dev/sdk/v3";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
   try {
+    // 1. Initialize Supabase Client for Server
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) { return cookieStore.get(name)?.value; },
+          set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }); },
+          remove(name: string, options: CookieOptions) { cookieStore.delete({ name, ...options }); },
+        },
+      }
+    );
+
+    // 2. Check Authentication
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    }
+
     const body = await req.json();
     const { siteName, subdomain, prompt } = body;
 
     if (!siteName || !subdomain || !prompt) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // --- FIX APPLIED HERE ---
-    // The Error "23503" happened because '0000...' didn't exist in auth.users.
-    // To fix this, replace the UUID below with a REAL User UID from your Supabase Dashboard.
-    // Go to Supabase -> Authentication -> Users -> Copy UID.
-    const TEST_USER_ID = "0795318f-f96e-42d3-b0aa-c4b49d7c4b95"; 
-    
-    // Note: Ideally, you should implement real auth check here:
-    // const cookieStore = cookies();
-    // const { data: { user } } = await supabase.auth.getUser();
-    // const userId = user?.id;
-
+    // 3. Trigger the job with REAL user ID
     const handle = await tasks.trigger<typeof buildSite>("build-site", {
-      userId: TEST_USER_ID, 
+      userId: user.id, 
       siteName,
       subdomain,
       prompt,

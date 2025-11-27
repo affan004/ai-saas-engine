@@ -41,7 +41,7 @@ export default function NewProjectPage() {
     try {
       await triggerBuild(name, prompt);
       // Redirect back to dashboard to see the "Building..." status
-      router.push("/app"); 
+      router.push("/"); 
     } catch (error) {
       console.error(error);
       alert("Failed to start build. Check console.");

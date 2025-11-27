@@ -16,35 +16,33 @@ export const buildSite = task({
   run: async (payload: BuildPayload) => {
     const owner = await github.getCurrentUser();
     
-    // --- ROBUST SANITIZATION ---
-    // 1. Lowercase
-    // 2. Replace any non-alphanumeric char with a hyphen
-    // 3. Remove multiple consecutive hyphens
-    // 4. Trim hyphens from start and end
-    // 5. Truncate to 50 chars to leave room for suffix
+    // 1. Sanitization
     const cleanName = payload.siteName
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-") // Note the '+' to grab groups of special chars
+      .replace(/[^a-z0-9]+/g, "-") 
       .replace(/^-+|-+$/g, "")
       .slice(0, 50);
 
-    // Ensure we don't end up with an empty string
     const finalName = cleanName || "my-saas-project";
-
     const uniqueSuffix = Date.now().toString().slice(-6);
     const repoName = `${finalName}-${uniqueSuffix}`;
-    
     const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN!;
 
-    // ... rest of the logic (logging, AI, GitHub, Vercel) ...
-    
     await logger.info("🚀 Starting Build...", { owner, repoName });
 
-    // 3. AI Generation
+    // 2. Generate Content (Mock AI for now)
     await logger.info("🤖 Generating Code...", { prompt: payload.prompt });
     const aiGeneratedCode = await ai.generateLandingPage(payload.prompt);
 
-    // 4. GitHub Repo
+    // 3. Create Database Record FIRST to get the Tenant ID
+    await logger.info("💾 Registering Tenant...");
+    const tenantId = await createTenant(
+      payload.userId,
+      payload.siteName, 
+      payload.subdomain 
+    );
+
+    // 4. Create GitHub Repo
     await logger.info("📁 Creating GitHub Repo...", { repoName });
     const repo = await github.createRepo(repoName, `AI App: ${payload.prompt}`);
     
@@ -52,15 +50,21 @@ export const buildSite = task({
     await logger.info("📝 Pushing Code to GitHub...");
     await github.pushFile(repoName, "app/page.tsx", aiGeneratedCode, owner);
 
-    // 6. Vercel Deployment
-    await logger.info("☁️ Deploying to Vercel...");
-    // FIX: Pass repoName as the project Name (sanitized), and pass owner/repo as the full repo path
+    // 6. Create Vercel Project
+    await logger.info("☁️ Creating Vercel Project...");
     const project = await vercel.createProject(repoName, repo.id, `${owner}/${repoName}`);
     
+    // 7. INJECT ENVIRONMENT VARIABLES (New Step)
+    // This connects the user's app to the "Mothership" Supabase
+    await logger.info("Tb️ Injecting Environment Variables...");
+    await vercel.addEnvironmentVariables(project.id, [
+      { key: "NEXT_PUBLIC_SUPABASE_URL", value: process.env.NEXT_PUBLIC_SUPABASE_URL!, target: ["production", "preview", "development"] },
+      { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", value: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, target: ["production", "preview", "development"] },
+      { key: "NEXT_PUBLIC_TENANT_ID", value: tenantId, target: ["production", "preview", "development"] }, // Critical for RLS
+    ]);
+
+    // 8. Assign Domain
     const fullDomain = `${payload.subdomain}-${uniqueSuffix}.${rootDomain}`;
-    
-    // FIX: Only add custom domain if we are NOT on localhost
-    // Vercel API rejects "something.localhost:3000"
     if (!rootDomain.includes("localhost")) {
       await logger.info("🌐 Adding Custom Domain...", { fullDomain });
       await vercel.addDomain(project.id, fullDomain);
@@ -68,14 +72,7 @@ export const buildSite = task({
       await logger.info("⚠️ Skipping Vercel Domain (Localhost detected)", { fullDomain });
     }
 
-    // 7. Save to DB
-    await logger.info("💾 Saving to Database...");
-    const tenantId = await createTenant(
-      payload.userId,
-      payload.siteName, // We store the original display name in the DB
-      payload.subdomain // We keep the original clean subdomain for the record
-    );
-
+    // 9. Update Tenant Status
     await supabaseAdmin
       .from("tenants")
       .update({ 
